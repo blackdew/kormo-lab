@@ -10,9 +10,21 @@ kormo-lab/
 │   ├── tutorial/     # 01.pretrain_from_scratch → 02.sft_qlora → 03.inference
 │   ├── src/kormo/    # KORMo 아키텍처 구현 + KORMoTrainer
 │   └── src/scripts/  # 실전용 accelerate 실행 스크립트 (1B/10B)
+├── notebooks/
+│   └── 01_kormo_1B_pretrain_colab_a100.ipynb  # Colab A100용 사전학습 노트북 (수정본)
 ├── .venv/            # Python 3.12 (uv), git 추적 제외
 └── README.md
 ```
+
+## Colab에서 학습 실행
+
+`notebooks/01_kormo_1B_pretrain_colab_a100.ipynb`를 Colab에 업로드 → 런타임 유형 A100 → 모두 실행.
+
+원본 튜토리얼 노트북 대비 변경점:
+- uv·flash-attn 설치 제거 (flex_attention 사용이라 불필요 — 빌드 시간 30분+ 절약)
+- `num_proc` 하드코딩(48/128) → `os.cpu_count()` 자동 설정
+- Google Drive 체크포인트 저장 옵션 (`USE_DRIVE`, 세션 끊김 대비)
+- transformers 4.57.0(yanked) → 4.57.1
 
 ## 환경
 
