@@ -32,6 +32,11 @@ kormo-lab/
 - 체크포인트는 optimizer 포함(~8GB) 최근 1개 유지, 완료 시 `final/`(2.6GB)에 배포용 저장 — Drive 무료 15GB 내
 - **wandb 로깅 기본 활성화** (`USE_WANDB`) — 프로젝트 `kormo-lab`, run 이름 `kormo-1B-{모드}`.
   API 키는 Colab 보안 비밀 `WANDB_API_KEY`에서 읽음 (없으면 로그인 프롬프트)
+- **검증셋 분리 + 학습 중 평가** — 고정 seed로 128 시퀀스(~0.5M 토큰)를 떼어 100 스텝마다
+  `eval/loss`·`eval/mean_token_accuracy` 로깅. multi-epoch 학습에서 train loss는 2 epoch째부터
+  암기 효과로 낙관적이므로 검증 지표가 진짜 진행 기준
+- **모드별 학습률 분기** — fresh/resume 5e-4, continue 5e-5. 수렴한 가중치에 from-scratch용
+  peak LR을 그대로 쓰면 train loss가 상승하며 성능이 파괴됨
 
 ## 평가 (`02_kormo_eval_colab.ipynb`)
 
