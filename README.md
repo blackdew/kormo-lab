@@ -23,8 +23,12 @@ kormo-lab/
 원본 튜토리얼 노트북 대비 변경점:
 - uv·flash-attn 설치 제거 (flex_attention 사용이라 불필요 — 빌드 시간 30분+ 절약)
 - `num_proc` 하드코딩(48/128) → `os.cpu_count()` 자동 설정
-- Google Drive 체크포인트 저장 옵션 (`USE_DRIVE`, 세션 끊김 대비)
 - transformers 4.57.0(yanked) → 4.57.1
+- Google Drive 저장 기반 **3-모드 자동 분기**:
+  - **fresh**: Drive에 아무것도 없으면 새로 초기화해 학습
+  - **resume**: `checkpoint-*`만 있으면(학습 중 끊김) optimizer 상태까지 복원해 정확히 재개
+  - **continue**: `final/`이 있으면 학습된 가중치를 로드해 그 위에 추가 학습
+- 체크포인트는 optimizer 포함(~8GB) 최근 1개 유지, 완료 시 `final/`(2.6GB)에 배포용 저장 — Drive 무료 15GB 내
 
 ## 환경
 
