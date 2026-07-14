@@ -1,6 +1,7 @@
 .venv/
 KORMo-tutorial/
 saved_models/
+kormo-1B-PT*/
 data/
 wandb/
 __pycache__/

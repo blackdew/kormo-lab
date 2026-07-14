@@ -13,6 +13,8 @@ kormo-lab/
 ├── notebooks/
 │   ├── 01_kormo_1B_pretrain_colab_a100.ipynb  # Colab A100용 사전학습 노트북 (수정본)
 │   └── 02_kormo_eval_colab.ipynb              # 벤치마크 평가 노트북 (L4로 충분)
+├── scripts/
+│   └── pretrain_local.py   # 로컬 Mac(MPS)용 사전학습 스크립트 — 노트북 파이프라인의 이식판
 ├── .venv/            # Python 3.12 (uv), git 추적 제외
 └── README.md
 ```
@@ -53,21 +55,51 @@ Drive의 `output/final/` 모델을 lm-evaluation-harness(0.4.12)로 평가. L4 G
 
 결과는 `MyDrive/kormo-1B-PT/evals/eval_*.json`에 누적 — 추가 학습 반복 시 성능 곡선 비교용
 
-## 환경
+## 환경 (uv)
+
+이미 세팅된 `.venv`가 있으면 활성화만 하면 됩니다:
 
 ```bash
 source .venv/bin/activate
 ```
 
-- 의존성은 PyPI에서 직접 설치됨 (transformers 4.57.1, torch, datasets, accelerate, trl 등)
-- `kormo` 패키지는 `.pth` 파일로 `KORMo-tutorial/src` 경로 연결 (별도 설치 없음)
-- **flash-attn 미설치** — CUDA 전용이라 macOS에서 빌드 불가
+처음부터 다시 만들려면 (uv 기준):
+
+```bash
+uv venv --python 3.12 .venv
+source .venv/bin/activate
+uv pip install torch "transformers==4.57.1" "datasets>=4.1.1" accelerate pyyaml
+# kormo 패키지를 .pth로 연결 (별도 설치 없이 KORMo-tutorial/src를 import 경로에 추가)
+echo "$(pwd)/KORMo-tutorial/src" > .venv/lib/python3.12/site-packages/kormo_src.pth
+```
+
+- 현재 설치: torch 2.13(MPS 지원), transformers 4.57.1, datasets 5.0, accelerate 1.14
+- **flash-attn 미설치** — CUDA 전용이라 macOS에서 빌드 불가 (로컬은 sdpa 사용)
+
+## 로컬(Mac)에서 학습 실행 (`scripts/pretrain_local.py`)
+
+Colab 노트북 파이프라인을 Apple Silicon(MPS)에서 돌 수 있게 옮긴 스크립트.
+Colab 버전과의 차이: flex_attention(CUDA 전용) → **sdpa** (intra-doc mask 없음 —
+패킹 시퀀스 안 문서 간 attention 허용), Drive → 로컬 `kormo-1B-PT/output/`, wandb 대신 콘솔 로깅.
+3-모드 자동 분기(fresh/resume/continue)와 모드별 LR 분기는 동일.
+
+```bash
+source .venv/bin/activate
+python scripts/pretrain_local.py --smoke               # 파이프라인 검증 (합성 데이터, 저장은 kormo-1B-PT-smoke/)
+python scripts/pretrain_local.py --max-docs 5000       # 데이터 일부로 짧은 학습
+python scripts/pretrain_local.py                       # 전체 1 epoch — M3 Pro 기준 수일 소요 주의
+```
+
+- M3 Pro 36GB 기준 1.3B bf16 학습이 메모리에는 들어가지만(가중치 2.6 + grad 2.6 + Adam ~5.2GB + 활성값),
+  **속도가 A100의 수십분의 1**이라 전체 학습은 비현실적 — 파이프라인 실험·디버깅 용도
+- 기본 seq 2048 / batch 1 / grad-accum 8. 메모리 부족하면 `--grad-checkpoint` 또는 `--seq-len 1024`
 
 ## 로컬(Mac)에서 가능한 작업
 
 - 토크나이저 실험: `KORMo-Team/KORMo-tokenizer` (vocab 125,000)
 - 데이터 파이프라인: 로드 → 토크나이즈 → 4096 시퀀스 패킹 → collator
 - 튜토리얼 데이터셋: `KORMo-Team/KORMo-tutorial-datasets` (`name='pretrain'`)
+- `pretrain_local.py`로 소규모 사전학습 실험 (위 섹션)
 
 ## GPU가 필요한 작업 (Colab A100 또는 Linux GPU 서버)
 
