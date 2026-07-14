@@ -29,6 +29,7 @@ kormo-lab/
   - **fresh**: Drive에 아무것도 없으면 새로 초기화해 학습
   - **resume**: `checkpoint-*`만 있으면(학습 중 끊김) optimizer 상태까지 복원해 정확히 재개
   - **continue**: `final/`이 있으면 학습된 가중치를 로드해 그 위에 추가 학습
+  - `FORCE_FRESH = True`로 기존 결과를 타임스탬프 백업 폴더로 옮기고 처음부터 재학습 가능
 - 체크포인트는 optimizer 포함(~8GB) 최근 1개 유지, 완료 시 `final/`(2.6GB)에 배포용 저장 — Drive 무료 15GB 내
 - **wandb 로깅 기본 활성화** (`USE_WANDB`) — 프로젝트 `kormo-lab`, run 이름 `kormo-1B-{모드}`.
   API 키는 Colab 보안 비밀 `WANDB_API_KEY`에서 읽음 (없으면 로그인 프롬프트)
