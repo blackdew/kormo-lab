@@ -12,7 +12,8 @@ kormo-lab/
 │   └── src/scripts/  # 실전용 accelerate 실행 스크립트 (1B/10B)
 ├── notebooks/
 │   ├── 01_kormo_1B_pretrain_colab_a100.ipynb  # Colab A100용 사전학습 노트북 (수정본)
-│   └── 02_kormo_eval_colab.ipynb              # 벤치마크 평가 노트북 (L4로 충분)
+│   ├── 02_kormo_eval_colab.ipynb              # 벤치마크 평가 노트북 (L4로 충분)
+│   └── 03_kormo_vl_mini_colab.ipynb           # 미니 KORMo-VL — 1B 백본 + SigLIP 프로젝터 정렬
 ├── scripts/
 │   └── pretrain_local.py   # 로컬 Mac(MPS)용 사전학습 스크립트 — 노트북 파이프라인의 이식판
 ├── .venv/            # Python 3.12 (uv), git 추적 제외
@@ -75,6 +76,19 @@ echo "$(pwd)/KORMo-tutorial/src" > .venv/lib/python3.12/site-packages/kormo_src.
 
 - 현재 설치: torch 2.13(MPS 지원), transformers 4.57.1, datasets 5.0, accelerate 1.14
 - **flash-attn 미설치** — CUDA 전용이라 macOS에서 빌드 불가 (로컬은 sdpa 사용)
+
+## 미니 KORMo-VL (`03_kormo_vl_mini_colab.ipynb`)
+
+1번 노트북의 1B 모델(`output/final/`)을 백본으로, [KORMo-VL](https://huggingface.co/KORMo-VL/KORMo-VL)과
+같은 LLaVA 방식으로 비전 능력을 붙이는 실습. SigLIP-base(동결) → 2층 MLP 프로젝터(**유일한 학습 대상**,
+~6M) → KORMo 1B(동결) 구조로, 이미지 1장을 196개 토큰으로 변환해 텍스트 앞에 이어붙인다.
+
+- 데이터: [KoLLaVA-Instruct-313k](https://huggingface.co/datasets/mosshoon/KoLLaVA-Instruct-313k)
+  (한국어 VQA, 이미지 내장 parquet) — 샤드 단위 부분 다운로드, 기본 2샤드(~1GB, 19k쌍)
+- 손실은 답변 토큰에만. A100 기준 학습 20~40분, `SMOKE=True`로 1.5k 미니셋 검증 가능
+- 산출물은 Drive `kormo-1B-PT/vl/`에 저장 — LLM 백본은 읽기 전용이라 1·2번 사이클과 독립
+- 검증: 조립 로직(SigLIP→프로젝터→`inputs_embeds`→KORMo, 손실 마스킹, grad 흐름, 수동 생성 루프)은
+  로컬 MPS에서 1스텝 테스트 통과
 
 ## 로컬(Mac)에서 학습 실행 (`scripts/pretrain_local.py`)
 
