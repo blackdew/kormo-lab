@@ -38,6 +38,9 @@ kormo-lab/
 - 체크포인트는 optimizer 포함(~8GB) 최근 1개 유지, 완료 시 `output/final/`(2.6GB)에 배포용 저장 — Drive 무료 15GB 내
 - **wandb 로깅 기본 활성화** (`USE_WANDB`) — 프로젝트 `kormo-lab`, run 이름 `kormo-1B-{모드}`.
   API 키는 Colab 보안 비밀 `WANDB_API_KEY`에서 읽음 (없으면 로그인 프롬프트)
+  - run ID를 스테이지 output에 저장해 **resume 모드는 끊긴 run에 이어서 기록**
+    (`WANDB_RUN_ID`+`WANDB_RESUME=allow`) — 세션이 몇 번 끊겨도 곡선이 한 run에 이어짐
+  - 학습 셀 끝에서 `wandb.finish()` 호출 — 완주한 학습이 세션 타임아웃 탓에 Crashed로 표기되는 문제 방지
 - **검증셋 분리 + 학습 중 평가** — 고정 seed로 128 시퀀스(~0.5M 토큰)를 떼어 100 스텝마다
   `eval/loss`·`eval/mean_token_accuracy` 로깅. multi-epoch 학습에서 train loss는 2 epoch째부터
   암기 효과로 낙관적이므로 검증 지표가 진짜 진행 기준
@@ -86,6 +89,7 @@ echo "$(pwd)/KORMo-tutorial/src" > .venv/lib/python3.12/site-packages/kormo_src.
 - 데이터: [KoLLaVA-Instruct-313k](https://huggingface.co/datasets/mosshoon/KoLLaVA-Instruct-313k)
   (한국어 VQA, 이미지 내장 parquet) — 샤드 단위 부분 다운로드, 기본 2샤드(~1GB, 19k쌍)
 - 손실은 답변 토큰에만. A100 기준 학습 20~40분, `SMOKE=True`로 1.5k 미니셋 검증 가능
+- 학습 곡선은 wandb 프로젝트 `kormo-lab`에 기록 (run `kormo-vl-mini`, 종료 시 finish로 마감)
 - 산출물은 Drive `kormo-1B-PT/vl/`에 저장 — LLM 백본은 읽기 전용이라 1·2번 사이클과 독립
 - 검증: 조립 로직(SigLIP→프로젝터→`inputs_embeds`→KORMo, 손실 마스킹, grad 흐름, 수동 생성 루프)은
   로컬 MPS에서 1스텝 테스트 통과
@@ -94,8 +98,10 @@ echo "$(pwd)/KORMo-tutorial/src" > .venv/lib/python3.12/site-packages/kormo_src.
 
 Colab 노트북 파이프라인을 Apple Silicon(MPS)에서 돌 수 있게 옮긴 스크립트.
 Colab 버전과의 차이: flex_attention(CUDA 전용) → **sdpa** (intra-doc mask 없음 —
-패킹 시퀀스 안 문서 간 attention 허용), Drive → 로컬 `kormo-1B-PT/output/`, wandb 대신 콘솔 로깅.
+패킹 시퀀스 안 문서 간 attention 허용), Drive → 로컬 `kormo-1B-PT/output/`.
 3-모드 자동 분기(fresh/resume/continue)와 모드별 LR 분기는 동일.
+wandb 로깅도 노트북과 같은 방식(프로젝트 `kormo-lab`, resume 시 run 이어붙임, 종료 시 finish) —
+`--no-wandb`로 끄고, smoke 모드·wandb 미설치 환경은 자동으로 콘솔 로깅 폴백.
 
 ```bash
 source .venv/bin/activate

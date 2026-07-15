@@ -6,8 +6,10 @@ Colab(A100) 버전과의 차이:
   - flex_attention(CUDA 전용) → sdpa. intra-document mask가 없어져 패킹된 시퀀스 안에서
     문서 간 attention이 허용됨 (GPT-2 시절 표준 방식 — 튜토리얼 스케일에서 영향 미미)
   - Google Drive → --base-dir (기본 ./kormo-1B-PT) 아래 output/ 에 저장
-  - wandb 대신 콘솔 로깅 (report_to='none')
 모드 자동 분기(fresh/resume/continue)와 학습률 분기는 노트북과 동일.
+wandb 로깅도 노트북과 동일하게 동작: 프로젝트 kormo-lab, resume 모드는 저장된 run ID로
+이전 run에 이어 기록, 종료 시 wandb.finish()로 Finished 마감.
+(--no-wandb로 끔. smoke 모드와 wandb 미설치·미로그인 환경은 자동으로 콘솔 로깅)
 
 사용 예:
   python scripts/pretrain_local.py --smoke               # 파이프라인 동작 검증 (합성 데이터 2스텝)
@@ -43,6 +45,7 @@ def parse_args():
     p.add_argument('--grad-checkpoint', action='store_true', help='gradient checkpointing (메모리↓ 속도↓)')
     p.add_argument('--force-fresh', action='store_true', help='기존 output/을 백업하고 처음부터')
     p.add_argument('--smoke', action='store_true', help='합성 데이터로 파이프라인 검증 (다운로드 최소화)')
+    p.add_argument('--no-wandb', action='store_true', help='wandb 로깅 끄기 (smoke 모드는 자동 off)')
     return p.parse_args()
 
 
@@ -71,6 +74,39 @@ def resolve_mode(base_dir, force_fresh):
     else:
         mode = 'fresh'
     return mode, output_dir, final_dir
+
+
+def setup_wandb(args, mode, output_dir):
+    """노트북과 동일한 wandb run 관리 — resume이면 저장된 run ID로 이어 기록.
+
+    run의 정체성은 이름이 아니라 ID: resume 모드는 output/에 저장해둔 ID를 재사용해
+    끊긴 run의 곡선에 이어붙이고, 그 외 모드는 global_step이 0부터 시작하므로
+    새 run을 발급한다 (같은 run에 낮은 스텝을 다시 쓰면 wandb가 로그를 거부함).
+    반환: (report_to, run_name)
+    """
+    if args.no_wandb or args.smoke:
+        return 'none', None
+    try:
+        import wandb  # noqa: F401
+    except ImportError:
+        print('wandb 미설치 — 콘솔 로깅으로 폴백 (uv pip install wandb)')
+        return 'none', None
+
+    os.environ.setdefault('WANDB_PROJECT', 'kormo-lab')
+    run_name = f'kormo-1B-local-{mode}'
+    run_id_file = os.path.join(output_dir, 'wandb_run_id.txt')
+    if mode == 'resume' and os.path.exists(run_id_file):
+        with open(run_id_file) as f:
+            run_id = f.read().strip()
+        print(f'wandb: 이전 세션 run에 이어서 기록 — {run_id}')
+    else:
+        run_id = f'{run_name}-{datetime.now():%Y%m%d-%H%M%S}'
+        os.makedirs(output_dir, exist_ok=True)
+        with open(run_id_file, 'w') as f:
+            f.write(run_id)
+    os.environ['WANDB_RUN_ID'] = run_id
+    os.environ['WANDB_RESUME'] = 'allow'   # 같은 ID의 run이 있으면 이어서, 없으면 새로 생성
+    return 'wandb', run_name
 
 
 def load_tokenizer():
@@ -151,7 +187,8 @@ def main():
     device = pick_device()
     mode, output_dir, final_dir = resolve_mode(args.base_dir, args.force_fresh)
     lr = args.lr or (5e-5 if mode == 'continue' else 5e-4)
-    print(f'device: {device} | 모드: {mode} | LR: {lr} | 저장: {output_dir}')
+    report_to, run_name = setup_wandb(args, mode, output_dir)
+    print(f'device: {device} | 모드: {mode} | LR: {lr} | 저장: {output_dir} | 로깅: {report_to}')
 
     import torch
     from dataclasses import dataclass
@@ -204,7 +241,8 @@ def main():
         save_steps=args.save_steps,
         save_total_limit=1,
         save_only_model=False,
-        report_to='none',
+        report_to=report_to,
+        run_name=run_name,
         dataloader_pin_memory=False,   # MPS에서는 pin_memory 미지원 경고 방지
     )
 
@@ -233,6 +271,11 @@ def main():
     with torch.no_grad():
         out = model.generate(**inputs, max_new_tokens=32, do_sample=True, top_p=0.9)
     print('생성 테스트:', tokenizer.decode(out[0], skip_special_tokens=True))
+
+    # run을 Finished 상태로 마감 — 없으면 프로세스 강제 종료 시 Crashed로 표기
+    if report_to == 'wandb':
+        import wandb
+        wandb.finish()
 
 
 if __name__ == '__main__':
